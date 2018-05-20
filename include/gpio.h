@@ -15,6 +15,8 @@
 #define GPIO_LED1_PORT	GPIOF
 #define GPIO_LED2_PIN	GPIO_PIN_7
 #define GPIO_LED2_PORT	GPIOF
+#define GPIO_BTNUP_PIN	GPIO_PIN_2
+#define GPIO_BTNUP_PORT	GPIOG
 
 #ifdef __cplusplus
 extern "C"

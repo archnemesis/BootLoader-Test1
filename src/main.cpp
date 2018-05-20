@@ -28,15 +28,14 @@
 // ----------------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "diag/Trace.h"
 #include "stm32f4xx_hal.h"
 #include "gpio.h"
 #include "usart.h"
 #include "fmc.h"
 #include "firmware_metadata.h"
-
-#define APPLICATION_ADDRESS 0x08008000
-#define APPLICATION_FW_META_OFFSET 0x040C
+#include "iap.h"
 
 // ----- main() ---------------------------------------------------------------
 
@@ -52,47 +51,57 @@ uint32_t JumpAddress;
 
 int main(int argc, char* argv[])
 {
-#ifdef DEBUG
-	trace_printf("Entering bootloader...\n");
-#endif
 
 	BSP_GPIO_Init();
-	BSP_USART_Init();
-	BSP_FMC_Init();
 
-#ifdef DEBUG
-	trace_printf("Looking for application signature...\n");
-#endif
-
-	BSP_USART_WriteLn(&huart1, "BootLoader-Test1");
-	BSP_USART_WriteLn(&huart1, "Looking for application signature at 0x08008000...");
-
-	if (((*(volatile uint32_t*)APPLICATION_ADDRESS) & 0x2FF00000) == 0x20000000)
+	if (HAL_GPIO_ReadPin(GPIO_BTNUP_PORT, GPIO_BTNUP_PIN) == GPIO_PIN_RESET)
 	{
-		FirmwareMetadata_t *fw_meta = (FirmwareMetadata_t *)(APPLICATION_ADDRESS + APPLICATION_FW_META_OFFSET);
-
 #ifdef DEBUG
-		trace_printf("Found firmware version: %d.%d.%d\n", fw_meta->major, fw_meta->minor, fw_meta->rev);
+		trace_printf("Boot switch engaged, entering bootloader...\n");
 #endif
 
-		BSP_USART_WriteLn(&huart1, "Booting application firmware at 0x08008000...");
-		BSP_USART_DeInit();
-
-#ifdef DEBUG
-		trace_printf("Found application signature: %#010x\n", ((*(volatile uint32_t*)APPLICATION_ADDRESS) & 0x2FF00000));
-		trace_printf("Jumping to address %#010x\n", (APPLICATION_ADDRESS + 4));
-#endif
-
-		JumpAddress = *(volatile uint32_t*) (APPLICATION_ADDRESS + 4);
-		JumpToApplication = (void (*)(void))JumpAddress;
-
-		__set_MSP(*(volatile uint32_t*) APPLICATION_ADDRESS);
-		JumpToApplication();
+		BSP_USART_Init();
+		IAP_Init();
 	}
 	else
 	{
-		BSP_USART_WriteLn(&huart1, "No signature found at 0x08008000...");
-		HAL_GPIO_WritePin(GPIO_LED2_PORT, GPIO_LED2_PIN, GPIO_PIN_SET);
+#ifdef DEBUG
+			trace_printf("Found application signature: %#010x\n",
+					((*(volatile uint32_t*) APPLICATION_ADDRESS) & 0x2FF00000));
+#endif
+
+		if (((*(volatile uint32_t*) APPLICATION_ADDRESS) & 0x2FF00000)
+				== 0x20000000)
+		{
+			FirmwareMetadata_t *fw_meta =
+					(FirmwareMetadata_t *) (APPLICATION_ADDRESS
+							+ APPLICATION_FW_META_OFFSET);
+
+#ifdef DEBUG
+			trace_printf("Found firmware version: %d.%d.%d\n",
+					fw_meta->major,
+					fw_meta->minor,
+					fw_meta->rev
+					);
+#endif
+
+			JumpAddress = *(volatile uint32_t*) (APPLICATION_ADDRESS + 4);
+			JumpToApplication = (void (*)(void))JumpAddress;
+
+			__set_MSP(*(volatile uint32_t*) APPLICATION_ADDRESS);
+			JumpToApplication();
+		}
+		else
+		{
+#ifdef DEBUG
+			trace_printf("No firmware signature found or firmware signature invalid\n");
+#endif
+
+			while (1)
+			{
+
+			}
+		}
 	}
 
 	// Infinite loop

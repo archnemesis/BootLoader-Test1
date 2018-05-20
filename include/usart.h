@@ -51,6 +51,9 @@ void BSP_USART_Write(UART_HandleTypeDef *huart, const char *string);
  */
 void BSP_USART_WriteLn(UART_HandleTypeDef *huart, const char *string);
 
+#define usart_write(s) BSP_USART_Write(&huart1, s)
+#define usart_writeln(s) BSP_USART_WriteLn(&huart1, s)
+
 #ifdef __cplusplus
 }
 #endif
