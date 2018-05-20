@@ -31,8 +31,12 @@
 #include "diag/Trace.h"
 #include "stm32f4xx_hal.h"
 #include "gpio.h"
+#include "usart.h"
+#include "fmc.h"
+#include "firmware_metadata.h"
 
 #define APPLICATION_ADDRESS 0x08008000
+#define APPLICATION_FW_META_OFFSET 0x040C
 
 // ----- main() ---------------------------------------------------------------
 
@@ -48,11 +52,37 @@ uint32_t JumpAddress;
 
 int main(int argc, char* argv[])
 {
-	// At this stage the system clock should have already been configured
-	// at high speed.
+#ifdef DEBUG
+	trace_printf("Entering bootloader...\n");
+#endif
+
+	BSP_GPIO_Init();
+	BSP_USART_Init();
+	BSP_FMC_Init();
+
+#ifdef DEBUG
+	trace_printf("Looking for application signature...\n");
+#endif
+
+	BSP_USART_WriteLn(&huart1, "BootLoader-Test1");
+	BSP_USART_WriteLn(&huart1, "Looking for application signature at 0x08008000...");
 
 	if (((*(volatile uint32_t*)APPLICATION_ADDRESS) & 0x2FF00000) == 0x20000000)
 	{
+		FirmwareMetadata_t *fw_meta = (FirmwareMetadata_t *)(APPLICATION_ADDRESS + APPLICATION_FW_META_OFFSET);
+
+#ifdef DEBUG
+		trace_printf("Found firmware version: %d.%d.%d\n", fw_meta->major, fw_meta->minor, fw_meta->rev);
+#endif
+
+		BSP_USART_WriteLn(&huart1, "Booting application firmware at 0x08008000...");
+		BSP_USART_DeInit();
+
+#ifdef DEBUG
+		trace_printf("Found application signature: %#010x\n", ((*(volatile uint32_t*)APPLICATION_ADDRESS) & 0x2FF00000));
+		trace_printf("Jumping to address %#010x\n", (APPLICATION_ADDRESS + 4));
+#endif
+
 		JumpAddress = *(volatile uint32_t*) (APPLICATION_ADDRESS + 4);
 		JumpToApplication = (void (*)(void))JumpAddress;
 
@@ -61,8 +91,7 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		BSP_GPIO_Init();
-
+		BSP_USART_WriteLn(&huart1, "No signature found at 0x08008000...");
 		HAL_GPIO_WritePin(GPIO_LED2_PORT, GPIO_LED2_PIN, GPIO_PIN_SET);
 	}
 
