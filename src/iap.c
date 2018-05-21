@@ -7,8 +7,15 @@
 
 #include "iap.h"
 #include "usart.h"
+#include "crc.h"
 #include "firmware_metadata.h"
+#include "flash_if.h"
+
+#include <string.h>
+
+#ifdef DEBUG
 #include "diag/Trace.h"
+#endif
 
 static FirmwareMetadata_t *fw_meta;
 static uint8_t serialBuffer[2048];
@@ -30,7 +37,12 @@ void IAP_Init(void)
 	IAP_FirmwareHeader_t *hdr;
 	IAP_FirmwarePacket_t *chk;
 	HAL_StatusTypeDef result;
+	uint32_t crcvalue;
 	uint16_t bytes;
+
+#ifdef DEBUG
+	trace_printf("Serial port open, waiting for command...\n");
+#endif
 
 	while (1)
 	{
@@ -51,7 +63,7 @@ void IAP_Init(void)
 							+ APPLICATION_FW_META_OFFSET);
 					pkt.major = fw_meta->major;
 					pkt.minor = fw_meta->minor;
-					pkt.rev = fw_meta.rev;
+					pkt.rev = fw_meta->rev;
 				}
 
 				BSP_USART_PutChar(&huart1, IAP_INF);
@@ -69,17 +81,27 @@ void IAP_Init(void)
 
 					if (result == HAL_OK)
 					{
+#ifdef DEBUG
+						trace_printf("Got header packet data...\n");
+#endif
 						hdr = (IAP_FirmwareHeader_t *) &serialBuffer[0];
 						bytesExpected = hdr->size;
 						bytesReceived = 0;
 						packetCount++;
 
 						/* TODO: Erase flash and prepare for incoming data... */
+#ifdef DEBUG
+						trace_printf("Erasing flash...\n");
+#endif
+						FLASH_If_Erase();
 
 						BSP_USART_PutChar(&huart1, IAP_ACK);
 					}
 					else if (result == HAL_TIMEOUT || result == HAL_ERROR)
 					{
+#ifdef DEBUG
+						trace_printf("Timeout or error occurred, aborting transfer...\n");
+#endif
 						abortTransfer();
 					}
 				}
@@ -92,11 +114,15 @@ void IAP_Init(void)
 						bytes = bytesExpected - bytesReceived;
 					}
 
+					memset((void *)&serialBuffer[0], 0, 2048);
 					result = HAL_UART_Receive(&huart1, &serialBuffer[0],
-							bytes + 2, IAP_TRANSFER_TIMEOUT);
+							bytes + 8, IAP_TRANSFER_TIMEOUT);
 
 					if (result == HAL_OK)
 					{
+#ifdef DEBUG
+						trace_printf("Got next packet data...\n");
+#endif
 						chk = (IAP_FirmwarePacket_t *)&serialBuffer[0];
 
 						if (chk->sequence != packetCount) {
@@ -108,8 +134,34 @@ void IAP_Init(void)
 
 						/* TODO: Copy received data into flash memory... */
 
+						crcvalue = CRC32_Buffer((char *)&chk->data[0], IAP_MAX_PACKET_SIZE);
+						if (crcvalue != chk->checksum) {
+#ifdef DEBUG
+							trace_printf("Invalid checksum\n");
+#endif
+							abortTransfer();
+							break;
+						}
+
+#ifdef DEBUG
+							trace_printf("Writing chunk to flash...\n");
+#endif
+
+						FLASH_If_Write(APPLICATION_ADDRESS + bytesReceived, (uint32_t *)&chk->data[0], IAP_MAX_PACKET_SIZE/4);
+
 						bytesReceived += bytes;
 						packetCount++;
+
+						if (bytesReceived == bytesExpected) {
+							packetCount = 0;
+							bytesReceived = 0;
+							bytesExpected = 0;
+
+#ifdef DEBUG
+							trace_printf("Transfer complete.\n");
+#endif
+						}
+
 						BSP_USART_PutChar(&huart1, IAP_ACK);
 					}
 					else if (result == HAL_TIMEOUT || result == HAL_ERROR)
@@ -127,9 +179,4 @@ void IAP_Init(void)
 	{
 		// waiting temporarily...
 	}
-}
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-
 }

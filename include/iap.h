@@ -13,6 +13,8 @@ extern "C"
 {
 #endif
 
+#include <stdint.h>
+
 #define IAP_MAX_PACKET_SIZE	1024
 
 #define IAP_ACK 0xAB
@@ -21,9 +23,9 @@ extern "C"
 #define IAP_INF 0xAE
 #define IAP_SOH 0xAF
 
-#define IAP_NAK_TIMEOUT 100
-#define IAP_SOP_TIMEOUT 100
-#define IAP_TRANSFER_TIMEOUT 100
+#define IAP_NAK_TIMEOUT 1000
+#define IAP_SOP_TIMEOUT 1000
+#define IAP_TRANSFER_TIMEOUT 1000
 
 typedef struct IAP_DeviceInfo {
 	uint8_t major;
@@ -33,7 +35,8 @@ typedef struct IAP_DeviceInfo {
 } __attribute__((packed)) IAP_DeviceInfo_t;
 
 typedef struct IAP_FirmwarePacket {
-	uint16_t sequence;
+	uint32_t sequence;
+	uint32_t checksum;
 	uint32_t data[IAP_MAX_PACKET_SIZE / 4];
 } __attribute__((packed)) IAP_FirmwarePacket_t;
 

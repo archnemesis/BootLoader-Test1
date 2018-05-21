@@ -34,7 +34,9 @@
 #include "gpio.h"
 #include "usart.h"
 #include "fmc.h"
+#include "crc.h"
 #include "firmware_metadata.h"
+#include "flash_if.h"
 #include "iap.h"
 
 // ----- main() ---------------------------------------------------------------
@@ -61,6 +63,8 @@ int main(int argc, char* argv[])
 #endif
 
 		BSP_USART_Init();
+		BSP_CRC_Init();
+		FLASH_If_Init();
 		IAP_Init();
 	}
 	else

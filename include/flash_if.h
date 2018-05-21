@@ -38,7 +38,9 @@ enum
 	FLASHIF_WRP_DISABLE
 };
 
-void FLASH_If_Erase(uint32_t start);
+void FLASH_If_Init(void);
+HAL_StatusTypeDef FLASH_If_Erase();
+HAL_StatusTypeDef FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t length);
 
 #ifdef __cplusplus
 }
